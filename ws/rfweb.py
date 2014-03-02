@@ -13,6 +13,7 @@ import urlparse
 from wsgiref.util import shift_path_info
 import os
 import os.path
+import urllib
 
 import sys
 sys.path.append("../")
@@ -50,7 +51,8 @@ exts = {
 
 USERS = {
     "eder": "abc",
-    "allan": "def"    
+    "allan": "def",    
+    "test": "test"
 }
 
 def reply(start_response, status_code, ctype=None, content=None):
@@ -69,6 +71,8 @@ def redirect(start_response, destination):
     return []
     
 def application(env, start_response):
+    #print env
+    old_path = env["PATH_INFO"]
     path = shift_path_info(env)
     request = parse_qs(env["QUERY_STRING"])
     try:
@@ -80,23 +84,35 @@ def application(env, start_response):
     rbody = ""
     ctype = PLAIN
 
-    if (path == "auth"):
+    print "path:'%s'" % path
+    if path == "auth":
         if "CONTENT_LENGTH" in env:
             try:
                 len_ = int(env["CONTENT_LENGTH"])
                 body = env['wsgi.input'].read(len_)
             except ValueError:
                 return reply(start_response, "400 Bad Request", PLAIN, "Missing login information.")
-            else:
-                request = parse_qs(body)
-                try:
-                    username = request["username"][0]
-                    password = request["password"][0]
-                except KeyError, IndexError:
-                    return reply(start_response, "400 Bad Request", "Missing login information.")
-                if username not in USERS or USERS[username] != password:
-                    return reply(start_response, "401 Unauthorized", PLAIN, "Unauthorized access.")
-                return reply(start_response, "200 OK", HTML, "Success!")
+
+            request = parse_qs(body)
+            try:
+                username = request["username"][0]
+                password = request["password"][0]
+                redirect_target = request["redirect"][0]
+            except KeyError, IndexError:
+                return reply(start_response, "400 Bad Request", "Missing login information.")
+            if username not in USERS or USERS[username] != password:
+                return reply(start_response, "401 Unauthorized", PLAIN, "Unauthorized access.")
+            text = (
+                "Authenticated. "
+                "Redirecting to <a href='%(url)s'>%(url)s</a> in 10 seconds. "
+                "<meta http-equiv='refresh' content='10;%(url)s'>"
+                ) % {'url': escape(redirect_target)}
+            return reply(start_response, "200 OK", HTML, text)
+    elif path == "login":
+        request = parse_qs(env["QUERY_STRING"])
+        content = open("login.html", "r").read()
+        content = content % {"redirect": request['redirect'][0]}
+        return reply(start_response, "200 OK", HTML, content)
     else:
         # Return file
         path = os.path.join(os.getcwd(), path + env["PATH_INFO"])
@@ -108,5 +124,9 @@ def application(env, start_response):
             return reply(start_response,"200 OK", ctype, rbody)
         # Couldn't find path, redirect to login
         else:
-            return redirect(start_response, "/login.html")
+            target = urllib.urlencode({
+                "redirect": "http://" + env["HTTP_HOST"] + "/" + old_path + env["PATH_INFO"] + "?" + env["QUERY_STRING"]
+            })
+            print target
+            return redirect(start_response, "/login?%s" % target)
 
