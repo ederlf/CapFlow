@@ -19,7 +19,7 @@ from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER
 from ryu.controller.handler import set_ev_cls
 from ryu.ofproto import ofproto_v1_3
 from ryu.lib.packet import packet
-from ryu.lib.packet import ethernet, ipv4, tcp
+from ryu.lib.packet import ethernet, ipv4, tcp, udp
 from ryu.ofproto import ether
 import collections
 
@@ -194,6 +194,24 @@ class CapFlow(app_manager.RyuApp):
             if ip.proto == 1:
                 print "ICMP? skipping"
                 pass
+            if ip.proto == self.IP_UDP:
+                print "UDP"
+                _udp = pkt.get_protocols(udp.udp)[0]
+                if _udp.dst_port == 53:
+                   print "DNS bypass"
+                   self.add_flow(datapath,
+                        parser.OFPMatch(
+                            in_port=in_port,
+                            eth_src=nw_src,
+                            eth_dst=nw_dst,
+                            eth_type=self.ETHER_IP,
+                            ip_proto=self.IP_UDP,
+                            udp_dst=53,
+                        ),
+                        [parser.OFPActionOutput(self.PORT_INTERNET)],
+                        priority=100,
+                        msg=msg,
+                    )
             elif ip.proto == self.IP_TCP:
                 print "TCP"
                 _tcp = pkt.get_protocols(tcp.tcp)[0]
