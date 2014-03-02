@@ -8,6 +8,8 @@ ovsdb-server --remote=punix:/usr/local/var/run/openvswitch/db.sock \
                      
 ovs-vswitchd --pidfile --detach
 
+sudo ovs-vsctl set bridge switch protocols=OpenFlow13
+
 ovs-vsctl add-br switch
 
 ip link add A type veth peer name B
