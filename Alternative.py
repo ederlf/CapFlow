@@ -32,8 +32,8 @@ class CapFlow(app_manager.RyuApp):
     TCP_HTTP = 80
     UDP_DNS = 53
 
-    GATEWAY_MAC = "00:00:00:00:00:02"
-    SERVER_IP = "10.0.0.10"
+    GATEWAY_MAC = "42:a2:76:7d:2e:72"
+    SERVER_IP = "192.168.17.1"
     
     PORT_INTERNET = 2
 
@@ -209,11 +209,11 @@ class CapFlow(app_manager.RyuApp):
                         [parser.OFPActionSetField(ipv4_dst=self.SERVER_IP),
                          parser.OFPActionOutput(self.PORT_INTERNET)
                         ],
-                        priority=20,
+                        priority=1000,
                     )
                     self.add_flow(datapath,
                         parser.OFPMatch(
-                            in_port=in_port,
+                            in_port=self.PORT_INTERNET,
                             eth_src=nw_dst,
                             eth_dst=nw_src,
                             eth_type=self.ETHER_IP,
@@ -223,14 +223,14 @@ class CapFlow(app_manager.RyuApp):
                             ipv4_src=self.SERVER_IP,
                             ipv4_dst=ip.src,
                         ),
-                        [parser.OFPActionSetField(ipv4_dst=ip.dst),
+                        [parser.OFPActionSetField(ipv4_src=ip.dst),
                          parser.OFPActionOutput(in_port)
                         ],
-                        priority=20,
+                        priority=1000,
                     )
             else:
                 print "Unknown IP proto, dropping"
-                self.add_flow(datapath, 1,
+                self.add_flow(datapath,
                     parser.OFPMatch(
                         in_port=in_port,
                         eth_src=nw_src,
