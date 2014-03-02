@@ -85,7 +85,7 @@ class CapFlow(app_manager.RyuApp):
 #        )
         self.mac_to_port[datapath.id][self.GATEWAY_MAC] = self.PORT_INTERNET
 
-    def add_flow(self, datapath, match, actions, priority = None, command=None):
+    def add_flow(self, datapath, match, actions, priority = None, command=None, msg=None):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
@@ -102,6 +102,9 @@ class CapFlow(app_manager.RyuApp):
                                 match=match, instructions=inst, command=command)
 
         datapath.send_msg(mod)
+        if msg:
+            out = parser.OFPPacketOut(datapath=datapath, match=match, instructions=inst,
+                buffer_id=msg.buffer_id, data=msg.data)
 
     def delete_flow(self, datapath, match, command=None):
         ofproto = datapath.ofproto
@@ -144,6 +147,7 @@ class CapFlow(app_manager.RyuApp):
                 ),
                 [parser.OFPActionOutput(in_port),],
                 priority=1,
+                msg=msg,
             )
 
     
@@ -177,6 +181,7 @@ class CapFlow(app_manager.RyuApp):
                 ),
                 [parser.OFPActionOutput(out_port),],
                 priority=100,
+                msg=msg,
             )
             return
 
@@ -210,6 +215,7 @@ class CapFlow(app_manager.RyuApp):
                          parser.OFPActionOutput(self.PORT_INTERNET)
                         ],
                         priority=1000,
+                        msg=msg,
                     )
                     self.add_flow(datapath,
                         parser.OFPMatch(
@@ -240,4 +246,5 @@ class CapFlow(app_manager.RyuApp):
                     ),
                     [],
                     priority=10,
+                    msg=msg,
                 )
