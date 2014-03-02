@@ -1,0 +1,8 @@
+#!/bin/sh
+
+sudo ifconfig C 192.168.17.1
+
+sudo iptables -A FORWARD -o eth1 -i C -s 192.168.17.0/24 -m conntrack --ctstate NEW -j ACCEPT
+sudo iptables -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+sudo iptables -t nat -F POSTROUTING
+sudo iptables -t nat -A POSTROUTING -o eth1 -j MASQUERADE
