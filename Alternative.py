@@ -15,7 +15,7 @@
 
 from ryu.base import app_manager
 from ryu.controller import ofp_event
-from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER
+from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER, HANDSHAKE_DISPATCHER
 from ryu.controller.handler import set_ev_cls
 from ryu.ofproto import ofproto_v1_3
 from ryu.lib.packet import packet
@@ -103,9 +103,10 @@ class CapFlow(app_manager.RyuApp):
 
         datapath.send_msg(mod)
         if msg:
-            out = parser.OFPPacketOut(datapath=datapath, match=match, instructions=inst,
-                buffer_id=msg.buffer_id, data=msg.data)
-
+            out = parser.OFPPacketOut(datapath=datapath, actions=[parser.OFPActionOutput(ofproto.OFPP_TABLE)], in_port=1,
+                buffer_id=0xffffffff, data=msg.data)
+            datapath.send_msg(out)
+            
     def delete_flow(self, datapath, match, command=None):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
@@ -117,7 +118,6 @@ class CapFlow(app_manager.RyuApp):
             out_port=ofproto.OFPP_ANY, out_group=ofproto.OFPG_ANY,
         )
         datapath.send_msg(mod)
-
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
@@ -146,7 +146,7 @@ class CapFlow(app_manager.RyuApp):
                     eth_dst=nw_src,
                 ),
                 [parser.OFPActionOutput(in_port),],
-                priority=1,
+                priority=10,
                 msg=msg,
             )
 
@@ -215,8 +215,27 @@ class CapFlow(app_manager.RyuApp):
             elif ip.proto == self.IP_TCP:
                 print "TCP"
                 _tcp = pkt.get_protocols(tcp.tcp)[0]
+                print _tcp
                 if _tcp.dst_port == self.TCP_HTTP:
                     print "Is HTTP traffic, installing NAT entry"
+                    self.add_flow(datapath,
+                        parser.OFPMatch(
+                            in_port=self.PORT_INTERNET,
+                            eth_src=nw_dst,
+                            eth_dst=nw_src,
+                            eth_type=self.ETHER_IP,
+                            ip_proto=self.IP_TCP,
+                            tcp_dst=_tcp.src_port,
+                            tcp_src=_tcp.dst_port,
+                            ipv4_src=self.SERVER_IP,
+                            ipv4_dst=ip.src,
+                        ),
+                        [parser.OFPActionSetField(ipv4_src=ip.dst),
+                         parser.OFPActionOutput(in_port)
+                        ],
+                        priority=1000,
+                    )
+
                     self.add_flow(datapath,
                         parser.OFPMatch(
                             in_port=in_port,
@@ -235,23 +254,7 @@ class CapFlow(app_manager.RyuApp):
                         priority=1000,
                         msg=msg,
                     )
-                    self.add_flow(datapath,
-                        parser.OFPMatch(
-                            in_port=self.PORT_INTERNET,
-                            eth_src=nw_dst,
-                            eth_dst=nw_src,
-                            eth_type=self.ETHER_IP,
-                            ip_proto=self.IP_TCP,
-                            tcp_dst=_tcp.src_port,
-                            tcp_src=_tcp.dst_port,
-                            ipv4_src=self.SERVER_IP,
-                            ipv4_dst=ip.src,
-                        ),
-                        [parser.OFPActionSetField(ipv4_src=ip.dst),
-                         parser.OFPActionOutput(in_port)
-                        ],
-                        priority=1000,
-                    )
+                                        
             else:
                 print "Unknown IP proto, dropping"
                 self.add_flow(datapath,
