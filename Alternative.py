@@ -12,6 +12,10 @@ from ryu.lib.packet import packet
 from ryu.ofproto import ether
 from ryu.ofproto import ofproto_v1_3
 
+# Us
+import config
+
+
 class CapFlow(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
     ETHER_IP = 0x800
@@ -21,10 +25,6 @@ class CapFlow(app_manager.RyuApp):
     TCP_HTTP = 80
     UDP_DNS = 53
 
-    GATEWAY_MAC = "42:a2:76:7d:2e:72"
-    SERVER_IP = "192.168.17.1"
-    
-    PORT_INTERNET = 2
 
     def __init__(self, *args, **kwargs):
         super(CapFlow, self).__init__(*args, **kwargs)
@@ -60,7 +60,7 @@ class CapFlow(app_manager.RyuApp):
 #                ip_proto=self.IP_UDP,
 #                udp_src=self.UDP_DNS,
 #            ),
-#            [parser.OFPActionOutput(self.PORT_INTERNET),]
+#            [parser.OFPActionOutput(config.AUTH_SERVER_PORT),]
 #        )
 #
 #        #Flow to redirect HTTP traffic
@@ -70,9 +70,9 @@ class CapFlow(app_manager.RyuApp):
 #                ip_proto=self.IP_TCP,
 #                tcp_src=self.TCP_HTTP,
 #            )
-#            [parser.OFPActionOutput(self.PORT_INTERNET),],
+#            [parser.OFPActionOutput(config.AUTH_SERVER_PORT),],
 #        )
-        self.mac_to_port[datapath.id][self.GATEWAY_MAC] = self.PORT_INTERNET
+        self.mac_to_port[datapath.id][config.AUTH_SERVER_MAC] = config.AUTH_SERVER_PORT
 
     @staticmethod
     def add_flow(self, datapath, match, actions, priority = None, command=None, msg=None):
@@ -199,7 +199,7 @@ class CapFlow(app_manager.RyuApp):
                             ip_proto=self.IP_UDP,
                             udp_dst=53,
                         ),
-                        [parser.OFPActionOutput(self.PORT_INTERNET)],
+                        [parser.OFPActionOutput(config.AUTH_SERVER_PORT)],
                         priority=100,
                         msg=msg,
                     )
@@ -211,14 +211,14 @@ class CapFlow(app_manager.RyuApp):
                     print "Is HTTP traffic, installing NAT entry"
                     self.add_flow(datapath,
                         parser.OFPMatch(
-                            in_port=self.PORT_INTERNET,
+                            in_port=config.AUTH_SERVER_PORT,
                             eth_src=nw_dst,
                             eth_dst=nw_src,
                             eth_type=self.ETHER_IP,
                             ip_proto=self.IP_TCP,
                             tcp_dst=_tcp.src_port,
                             tcp_src=_tcp.dst_port,
-                            ipv4_src=self.SERVER_IP,
+                            ipv4_src=config.AUTH_SERVER_IP,
                             ipv4_dst=ip.src,
                         ),
                         [parser.OFPActionSetField(ipv4_src=ip.dst),
@@ -239,8 +239,8 @@ class CapFlow(app_manager.RyuApp):
                             ipv4_src=ip.src,
                             ipv4_dst=ip.dst,
                         ),
-                        [parser.OFPActionSetField(ipv4_dst=self.SERVER_IP),
-                         parser.OFPActionOutput(self.PORT_INTERNET)
+                        [parser.OFPActionSetField(ipv4_dst=config.AUTH_SERVER_IP),
+                         parser.OFPActionOutput(config.AUTH_SERVER_PORT)
                         ],
                         priority=1000,
                         msg=msg,
