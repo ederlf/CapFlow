@@ -26,8 +26,6 @@ class Proto(object):
 
 
 class CapFlow(app_manager.RyuApp):
-
-
     def __init__(self, *args, **kwargs):
         super(CapFlow, self).__init__(*args, **kwargs)
         self.mac_to_port = collections.defaultdict(dict)
@@ -75,6 +73,8 @@ class CapFlow(app_manager.RyuApp):
             print "New client: dpid", dpid, "mac", nw_src, "port", in_port
             self.mac_to_port[dpid][nw_src] = in_port
             print "Installing *->%s forwarding rule" % nw_src
+            # This enables all traffic addressed to the client to go there
+            # FIXME: do we really want to enable this for an unauthenticated host?
             util.add_flow(datapath,
                 parser.OFPMatch(
                     eth_dst=nw_src,
@@ -84,10 +84,11 @@ class CapFlow(app_manager.RyuApp):
                 msg=msg,
             )
 
-    
+        # pass ARP through, defaults to flooding if destination unknown
         if eth.ethertype == Proto.ETHER_ARP:
             print "ARP"
             port = self.mac_to_port[dpid].get(nw_dst, ofproto.OFPP_FLOOD)
+
             out = parser.OFPPacketOut(
                     datapath=datapath,
                     buffer_id=msg.buffer_id,
@@ -98,16 +99,16 @@ class CapFlow(app_manager.RyuApp):
             datapath.send_msg(out)
             return
 
+        # Non-ARP traffic to unknown destination is dropped
         if nw_dst not in self.mac_to_port[dpid]:
             print "Unknown destination!",
             return
-        out_port = self.mac_to_port[dpid][nw_dst]
-        
-        is_authenticated = False
 
-        if is_authenticated:
-            print "authenticated"
-            print "Installing", nw_src, "to", nw_dst, "bypass"
+        # We know destination
+        out_port = self.mac_to_port[dpid][nw_dst]
+
+        # Helper functions (note: access variables from outer scope)
+        def install_l2_src_dst(nw_src, nw_dst, out_port):
             util.add_flow(datapath,
                 parser.OFPMatch(
                     eth_src=nw_src,
@@ -117,39 +118,45 @@ class CapFlow(app_manager.RyuApp):
                 priority=100,
                 msg=msg,
             )
+        def install_dns_fwd(nw_src, nw_dst, out_port):
+           util.add_flow(datapath,
+                parser.OFPMatch(
+                    eth_src=nw_src,
+                    eth_dst=nw_dst,
+                    eth_type=Proto.ETHER_IP,
+                    ip_proto=Proto.IP_UDP,
+                    udp_dst=Proto.UDP_DNS,
+                ),
+                [parser.OFPActionOutput(out_port)],
+                priority=100,
+                msg=msg,
+            )
+
+        
+        is_authenticated = False
+        # If the client is authenticated, install L2 MAC-MAC rule
+        if is_authenticated:
+            print "authenticated"
+            print "Installing", nw_src, "to", nw_dst, "bypass"
+            install_l2_src_dst(nw_src, nw_dst, out_port)
             return
 
-        # not authenticated
-        out_port = self.mac_to_port[dpid][nw_dst]
-
+        # Client is not authenticated
         if eth.ethertype == Proto.ETHER_IP:
-            print "is IP flow"
             ip = pkt.get_protocols(ipv4.ipv4)[0]
             if ip.proto == 1:
-                print "ICMP? skipping"
-                pass
+                print "ICMP, ignore"
+                return
             if ip.proto == Proto.IP_UDP:
-                print "UDP"
                 _udp = pkt.get_protocols(udp.udp)[0]
                 if _udp.dst_port == Proto.UDP_DNS:
-                   print "DNS bypass"
-                   util.add_flow(datapath,
-                        parser.OFPMatch(
-                            in_port=in_port,
-                            eth_src=nw_src,
-                            eth_dst=nw_dst,
-                            eth_type=Proto.ETHER_IP,
-                            ip_proto=Proto.IP_UDP,
-                            udp_dst=Proto.UDP_DNS,
-                        ),
-                        [parser.OFPActionOutput(config.AUTH_SERVER_PORT)],
-                        priority=100,
-                        msg=msg,
-                    )
+                   print "Install DNS bypass"
+                   install_dns_fwd(nw_src, nw_dst, out_port)
+                else:
+                    print "Unknown UDP proto, ignore"
+                    return
             elif ip.proto == Proto.IP_TCP:
-                print "TCP"
                 _tcp = pkt.get_protocols(tcp.tcp)[0]
-                print _tcp
                 if _tcp.dst_port == Proto.TCP_HTTP:
                     print "Is HTTP traffic, installing NAT entry"
                     util.add_flow(datapath,
