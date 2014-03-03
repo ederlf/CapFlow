@@ -74,7 +74,7 @@ class CapFlow(app_manager.RyuApp):
         self.mac_to_port[datapath.id][config.AUTH_SERVER_MAC] = config.AUTH_SERVER_PORT
 
     @staticmethod
-    def add_flow(self, datapath, match, actions, priority = None, command=None, msg=None):
+    def add_flow(datapath, match, actions, priority = None, command=None, msg=None):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
@@ -97,7 +97,7 @@ class CapFlow(app_manager.RyuApp):
             datapath.send_msg(out)
     
     @staticmethod
-    def delete_flow(self, datapath, match, command=None):
+    def delete_flow(datapath, match, command=None):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
