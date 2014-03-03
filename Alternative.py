@@ -13,15 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Python
+import collections
+
+# Ryu
 from ryu.base import app_manager
-from ryu.controller import ofp_event
 from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER, HANDSHAKE_DISPATCHER
 from ryu.controller.handler import set_ev_cls
-from ryu.ofproto import ofproto_v1_3
-from ryu.lib.packet import packet
+from ryu.controller import ofp_event
 from ryu.lib.packet import ethernet, ipv4, tcp, udp
+from ryu.lib.packet import packet
 from ryu.ofproto import ether
-import collections
+from ryu.ofproto import ofproto_v1_3
 
 class CapFlow(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
