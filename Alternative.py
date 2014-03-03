@@ -15,14 +15,16 @@ from ryu.ofproto import ofproto_v1_3
 # Us
 import config
 
-
-class CapFlow(app_manager.RyuApp):
+class Proto(object):
     ETHER_IP = 0x800
     ETHER_ARP = 0x806
     IP_UDP = 17
     IP_TCP = 6
     TCP_HTTP = 80
     UDP_DNS = 53
+
+
+class CapFlow(app_manager.RyuApp):
 
 
     def __init__(self, *args, **kwargs):
@@ -141,7 +143,7 @@ class CapFlow(app_manager.RyuApp):
             )
 
     
-        if eth.ethertype == self.ETHER_ARP:
+        if eth.ethertype == Proto.ETHER_ARP:
             print "ARP"
             port = self.mac_to_port[dpid].get(nw_dst, ofproto.OFPP_FLOOD)
             out = parser.OFPPacketOut(
@@ -178,43 +180,43 @@ class CapFlow(app_manager.RyuApp):
         # not authenticated
         out_port = self.mac_to_port[dpid][nw_dst]
 
-        if eth.ethertype == self.ETHER_IP:
+        if eth.ethertype == Proto.ETHER_IP:
             print "is IP flow"
             ip = pkt.get_protocols(ipv4.ipv4)[0]
             if ip.proto == 1:
                 print "ICMP? skipping"
                 pass
-            if ip.proto == self.IP_UDP:
+            if ip.proto == Proto.IP_UDP:
                 print "UDP"
                 _udp = pkt.get_protocols(udp.udp)[0]
-                if _udp.dst_port == 53:
+                if _udp.dst_port == Proto.UDP_DNS:
                    print "DNS bypass"
                    self.add_flow(datapath,
                         parser.OFPMatch(
                             in_port=in_port,
                             eth_src=nw_src,
                             eth_dst=nw_dst,
-                            eth_type=self.ETHER_IP,
-                            ip_proto=self.IP_UDP,
-                            udp_dst=53,
+                            eth_type=Proto.ETHER_IP,
+                            ip_proto=Proto.IP_UDP,
+                            udp_dst=Proto.UDP_DNS,
                         ),
                         [parser.OFPActionOutput(config.AUTH_SERVER_PORT)],
                         priority=100,
                         msg=msg,
                     )
-            elif ip.proto == self.IP_TCP:
+            elif ip.proto == Proto.IP_TCP:
                 print "TCP"
                 _tcp = pkt.get_protocols(tcp.tcp)[0]
                 print _tcp
-                if _tcp.dst_port == self.TCP_HTTP:
+                if _tcp.dst_port == Proto.TCP_HTTP:
                     print "Is HTTP traffic, installing NAT entry"
                     self.add_flow(datapath,
                         parser.OFPMatch(
                             in_port=config.AUTH_SERVER_PORT,
                             eth_src=nw_dst,
                             eth_dst=nw_src,
-                            eth_type=self.ETHER_IP,
-                            ip_proto=self.IP_TCP,
+                            eth_type=Proto.ETHER_IP,
+                            ip_proto=Proto.IP_TCP,
                             tcp_dst=_tcp.src_port,
                             tcp_src=_tcp.dst_port,
                             ipv4_src=config.AUTH_SERVER_IP,
@@ -231,8 +233,8 @@ class CapFlow(app_manager.RyuApp):
                             in_port=in_port,
                             eth_src=nw_src,
                             eth_dst=nw_dst,
-                            eth_type=self.ETHER_IP,
-                            ip_proto=self.IP_TCP,
+                            eth_type=Proto.ETHER_IP,
+                            ip_proto=Proto.IP_TCP,
                             tcp_dst=_tcp.dst_port,
                             tcp_src=_tcp.src_port,
                             ipv4_src=ip.src,
@@ -252,7 +254,7 @@ class CapFlow(app_manager.RyuApp):
                         in_port=in_port,
                         eth_src=nw_src,
                         eth_dst=nw_dst,
-                        eth_type=self.ETHER_IP,
+                        eth_type=Proto.ETHER_IP,
                         ip_proto=ip.proto,
                     ),
                     [],
