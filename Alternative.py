@@ -131,8 +131,63 @@ class CapFlow(app_manager.RyuApp):
                 priority=100,
                 msg=msg,
             )
+        def install_http_nat(nw_src, nw_dst, ip_src, ip_dst, tcp_src, tcp_dst):
+            # TODO: we do not change port right now so it might collide with other
+            # connections from the host. This is unlikely though
 
-        
+            # Reverse rule goes first
+            util.add_flow(datapath,
+                parser.OFPMatch(
+                    in_port=config.AUTH_SERVER_PORT,
+                    eth_src=config.AUTH_SERVER_MAC,
+                    eth_dst=nw_src,
+                    eth_type=Proto.ETHER_IP,
+                    ip_proto=Proto.IP_TCP,
+                    ipv4_src=config.AUTH_SERVER_IP,
+                    ipv4_dst=ip_src,
+                    tcp_dst=tcp_src,
+                    tcp_src=tcp_dst,
+                ),
+                [parser.OFPActionSetField(ipv4_src=ip_dst),
+                 parser.OFPActionSetField(eth_src=nw_dst)
+                 parser.OFPActionOutput(in_port)
+                ],
+                priority=1000,
+            )
+            # Forward tule
+            util.add_flow(datapath,
+                parser.OFPMatch(
+                    in_port=in_port,
+                    eth_src=nw_src,
+                    eth_dst=nw_dst,
+                    eth_type=Proto.ETHER_IP,
+                    ip_proto=Proto.IP_TCP,
+                    ipv4_src=ip_src,
+                    ipv4_dst=ip_dst,
+                    tcp_dst=tcp_dst,
+                    tcp_src=tcp_src,
+                ),
+                [parser.OFPActionSetField(ipv4_dst=config.AUTH_SERVER_IP),
+                 parser.OFPActionSetField(nw_dst=config.AUTH_SERVER_MAC),
+                 parser.OFPActionOutput(config.AUTH_SERVER_PORT)
+                ],
+                priority=1000,
+                msg=msg,
+            )
+        def drop_unknown_ip(nw_src, nw_dst, ip_proto):
+            util.add_flow(datapath,
+                parser.OFPMatch(
+                    eth_src=nw_src,
+                    eth_dst=nw_dst,
+                    eth_type=Proto.ETHER_IP,
+                    ip_proto=ip_proto,
+                ),
+                [],
+                priority=10,
+                msg=msg,
+            )
+
+        # Logic itself
         is_authenticated = False
         # If the client is authenticated, install L2 MAC-MAC rule
         if is_authenticated:
@@ -159,54 +214,7 @@ class CapFlow(app_manager.RyuApp):
                 _tcp = pkt.get_protocols(tcp.tcp)[0]
                 if _tcp.dst_port == Proto.TCP_HTTP:
                     print "Is HTTP traffic, installing NAT entry"
-                    util.add_flow(datapath,
-                        parser.OFPMatch(
-                            in_port=config.AUTH_SERVER_PORT,
-                            eth_src=nw_dst,
-                            eth_dst=nw_src,
-                            eth_type=Proto.ETHER_IP,
-                            ip_proto=Proto.IP_TCP,
-                            tcp_dst=_tcp.src_port,
-                            tcp_src=_tcp.dst_port,
-                            ipv4_src=config.AUTH_SERVER_IP,
-                            ipv4_dst=ip.src,
-                        ),
-                        [parser.OFPActionSetField(ipv4_src=ip.dst),
-                         parser.OFPActionOutput(in_port)
-                        ],
-                        priority=1000,
-                    )
-
-                    util.add_flow(datapath,
-                        parser.OFPMatch(
-                            in_port=in_port,
-                            eth_src=nw_src,
-                            eth_dst=nw_dst,
-                            eth_type=Proto.ETHER_IP,
-                            ip_proto=Proto.IP_TCP,
-                            tcp_dst=_tcp.dst_port,
-                            tcp_src=_tcp.src_port,
-                            ipv4_src=ip.src,
-                            ipv4_dst=ip.dst,
-                        ),
-                        [parser.OFPActionSetField(ipv4_dst=config.AUTH_SERVER_IP),
-                         parser.OFPActionOutput(config.AUTH_SERVER_PORT)
-                        ],
-                        priority=1000,
-                        msg=msg,
-                    )
-                                        
+                    install_http_nat(nw_src,nw_dst, ip.src, ip.dst, _tcp.src_port, _tcp.dst_port)
             else:
                 print "Unknown IP proto, dropping"
-                util.add_flow(datapath,
-                    parser.OFPMatch(
-                        in_port=in_port,
-                        eth_src=nw_src,
-                        eth_dst=nw_dst,
-                        eth_type=Proto.ETHER_IP,
-                        ip_proto=ip.proto,
-                    ),
-                    [],
-                    priority=10,
-                    msg=msg,
-                )
+                drop_unknown_ip(nw_src, nw_dst, ip.proto)
