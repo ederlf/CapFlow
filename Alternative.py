@@ -17,7 +17,6 @@ import config
 
 
 class CapFlow(app_manager.RyuApp):
-    OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
     ETHER_IP = 0x800
     ETHER_ARP = 0x806
     IP_UDP = 17
