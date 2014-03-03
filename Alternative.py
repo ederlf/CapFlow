@@ -14,6 +14,7 @@ from ryu.ofproto import ofproto_v1_3
 
 # Us
 import config
+import util
 
 class Proto(object):
     ETHER_IP = 0x800
@@ -37,11 +38,11 @@ class CapFlow(app_manager.RyuApp):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
         print "Clear rule table"
-        self.delete_flow(datapath, parser.OFPMatch())
+        util.delete_flow(datapath, parser.OFPMatch())
 
         # Send everything to ctrl
         print "Install sending to controller rule"
-        self.add_flow(datapath,
+        util.add_flow(datapath,
             parser.OFPMatch(),
             [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER)],
             priority=2,
@@ -51,41 +52,6 @@ class CapFlow(app_manager.RyuApp):
         # TODO: this assumes we are controlling only a single switch!
         self.mac_to_port[datapath.id][config.AUTH_SERVER_MAC] = config.AUTH_SERVER_PORT
 
-    @staticmethod
-    def add_flow(datapath, match, actions, priority = None, command=None, msg=None):
-        ofproto = datapath.ofproto
-        parser = datapath.ofproto_parser
-
-        if not command:
-            command = ofproto.OFPFC_ADD
-        if not priority:
-            priority = ofproto.OFP_DEFAULT_PRIORITY
-
-
-        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS,
-                                             actions)]
-
-        mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
-                                match=match, instructions=inst, command=command)
-
-        datapath.send_msg(mod)
-        if msg:
-            out = parser.OFPPacketOut(datapath=datapath, actions=[parser.OFPActionOutput(ofproto.OFPP_TABLE)], in_port=1,
-                buffer_id=0xffffffff, data=msg.data)
-            datapath.send_msg(out)
-    
-    @staticmethod
-    def delete_flow(datapath, match, command=None):
-        ofproto = datapath.ofproto
-        parser = datapath.ofproto_parser
-
-        if not command:
-            command = ofproto.OFPFC_DELETE
-
-        mod = parser.OFPFlowMod(datapath=datapath, match=match, command=command,
-            out_port=ofproto.OFPP_ANY, out_group=ofproto.OFPG_ANY,
-        )
-        datapath.send_msg(mod)
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
@@ -109,7 +75,7 @@ class CapFlow(app_manager.RyuApp):
             print "New client: dpid", dpid, "mac", nw_src, "port", in_port
             self.mac_to_port[dpid][nw_src] = in_port
             print "Installing *->%s forwarding rule" % nw_src
-            self.add_flow(datapath,
+            util.add_flow(datapath,
                 parser.OFPMatch(
                     eth_dst=nw_src,
                 ),
@@ -142,7 +108,7 @@ class CapFlow(app_manager.RyuApp):
         if is_authenticated:
             print "authenticated"
             print "Installing", nw_src, "to", nw_dst, "bypass"
-            self.add_flow(datapath,
+            util.add_flow(datapath,
                 parser.OFPMatch(
                     eth_src=nw_src,
                     eth_dst=nw_dst,
@@ -167,7 +133,7 @@ class CapFlow(app_manager.RyuApp):
                 _udp = pkt.get_protocols(udp.udp)[0]
                 if _udp.dst_port == Proto.UDP_DNS:
                    print "DNS bypass"
-                   self.add_flow(datapath,
+                   util.add_flow(datapath,
                         parser.OFPMatch(
                             in_port=in_port,
                             eth_src=nw_src,
@@ -186,7 +152,7 @@ class CapFlow(app_manager.RyuApp):
                 print _tcp
                 if _tcp.dst_port == Proto.TCP_HTTP:
                     print "Is HTTP traffic, installing NAT entry"
-                    self.add_flow(datapath,
+                    util.add_flow(datapath,
                         parser.OFPMatch(
                             in_port=config.AUTH_SERVER_PORT,
                             eth_src=nw_dst,
@@ -204,7 +170,7 @@ class CapFlow(app_manager.RyuApp):
                         priority=1000,
                     )
 
-                    self.add_flow(datapath,
+                    util.add_flow(datapath,
                         parser.OFPMatch(
                             in_port=in_port,
                             eth_src=nw_src,
@@ -225,7 +191,7 @@ class CapFlow(app_manager.RyuApp):
                                         
             else:
                 print "Unknown IP proto, dropping"
-                self.add_flow(datapath,
+                util.add_flow(datapath,
                     parser.OFPMatch(
                         in_port=in_port,
                         eth_src=nw_src,
