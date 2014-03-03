@@ -47,32 +47,8 @@ class CapFlow(app_manager.RyuApp):
             priority=2,
         )
 
-#        # install table-miss flow entry: Drop
-#        #
-#        print "Installing drop entry"
-#        self.add_flow(datapath, 0, parser.OFPMatch(), [])
-#
-#        #Rule to direct DNS traffic to the internet
-#        print "Installing DNS bypass"
-#        self.add_flow(
-#            datapath, 100,
-#            parser.OFPMatch(
-#                eth_type=self.ETHER_IP,
-#                ip_proto=self.IP_UDP,
-#                udp_src=self.UDP_DNS,
-#            ),
-#            [parser.OFPActionOutput(config.AUTH_SERVER_PORT),]
-#        )
-#
-#        #Flow to redirect HTTP traffic
-#        self.add_flow(datapath, 100,
-#            parser.OFPMatch(
-#                eth_type=self.ETHER_IP,
-#                ip_proto=self.IP_TCP,
-#                tcp_src=self.TCP_HTTP,
-#            )
-#            [parser.OFPActionOutput(config.AUTH_SERVER_PORT),],
-#        )
+        # So we don't need to learn auth server location
+        # TODO: this assumes we are controlling only a single switch!
         self.mac_to_port[datapath.id][config.AUTH_SERVER_MAC] = config.AUTH_SERVER_PORT
 
     @staticmethod
