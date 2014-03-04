@@ -149,7 +149,7 @@ class CapFlow(app_manager.RyuApp):
                     tcp_src=tcp_dst,
                 ),
                 [parser.OFPActionSetField(ipv4_src=ip_dst),
-                 parser.OFPActionSetField(eth_src=nw_dst)
+                 parser.OFPActionSetField(eth_src=nw_dst),
                  parser.OFPActionOutput(in_port)
                 ],
                 priority=1000,
@@ -168,7 +168,7 @@ class CapFlow(app_manager.RyuApp):
                     tcp_src=tcp_src,
                 ),
                 [parser.OFPActionSetField(ipv4_dst=config.AUTH_SERVER_IP),
-                 parser.OFPActionSetField(nw_dst=config.AUTH_SERVER_MAC),
+                 parser.OFPActionSetField(eth_dst=config.AUTH_SERVER_MAC),
                  parser.OFPActionOutput(config.AUTH_SERVER_PORT)
                 ],
                 priority=1000,
