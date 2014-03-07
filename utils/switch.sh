@@ -5,7 +5,7 @@ ovsdb-server --remote=punix:/usr/local/var/run/openvswitch/db.sock \
                      --certificate=db:Open_vSwitch,SSL,certificate \
                      --bootstrap-ca-cert=db:Open_vSwitch,SSL,ca_cert \
                      --pidfile --detach
-                     
+
 ovs-vswitchd --pidfile --detach
 
 ovs-vsctl add-br switch
