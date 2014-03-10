@@ -14,9 +14,12 @@ from wsgiref.util import shift_path_info
 import os
 import os.path
 import urllib
+import urllib2
 
 import sys
 sys.path.append("../")
+
+from config import CTL_REST_IP, CTL_REST_PORT
 
 PLAIN = 0
 HTML = 1
@@ -73,6 +76,22 @@ def redirect(start_response, destination):
     return []
 
 
+def get_client_address(environ):
+    try:
+        return environ['HTTP_X_FORWARDED_FOR'].split(',')[-1].strip()
+    except KeyError:
+        return environ['REMOTE_ADDR']
+
+
+def send_auth_request(ip):
+    server = "{:s}:{:s}".format(CTL_REST_IP, CTL_REST_PORT)
+    url = "http://{:s}/v1.0/authenticate/{:s}".format(server, ip)
+
+    params = urllib.urlencode({})
+    response = urllib2.urlopen(url, params).read()
+    print response
+
+
 def application(env, start_response):
     #print env
     old_path = env["PATH_INFO"]
@@ -113,6 +132,7 @@ def application(env, start_response):
                 "Redirecting to <a href='%(url)s'>%(url)s</a> in 10 seconds. "
                 "<meta http-equiv='refresh' content='10;%(url)s'>"
                 ) % {'url': escape(redirect_target)}
+            send_auth_request(get_client_address(env))
             return reply(start_response, "200 OK", HTML, text)
     elif path == "login":
         request = parse_qs(env["QUERY_STRING"])
