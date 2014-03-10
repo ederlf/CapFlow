@@ -2,7 +2,7 @@
 # Python
 import collections
 
-# Ryu
+# Ryu - OpenFlow
 from ryu.base import app_manager
 from ryu.controller.handler import CONFIG_DISPATCHER
 from ryu.controller.handler import MAIN_DISPATCHER
@@ -14,9 +14,14 @@ from ryu.lib.packet import packet
 from ryu.ofproto import ether
 from ryu.ofproto import ofproto_v1_3
 
+# Ryu - REST API
+from ryu.app.wsgi import WSGIApplication
+from ryu.controller import dpset
+
 # Us
 import config
 import util
+from rest import UserController
 
 
 class Proto(object):
@@ -29,9 +34,20 @@ class Proto(object):
 
 
 class CapFlow(app_manager.RyuApp):
+    OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
+    _CONTEXTS = {
+        'dpset': dpset.DPSet,
+        'wsgi': WSGIApplication
+    }
+
     def __init__(self, *args, **kwargs):
         super(CapFlow, self).__init__(*args, **kwargs)
         self.mac_to_port = collections.defaultdict(dict)
+        self.authenticate = collections.defaultdict(dict)
+        wsgi = kwargs['wsgi']
+
+        wsgi.registory['UserController'] = self.authenticate
+        UserController.register(wsgi)
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -194,8 +210,17 @@ class CapFlow(app_manager.RyuApp):
                 msg=msg,
             )
 
+        if eth.ethertype != Proto.ETHER_IP:
+            print "not handling non-ip traffic"
+            return
+
+        ip = pkt.get_protocols(ipv4.ipv4)[0]
+
         # Logic itself
         is_authenticated = False
+        if self.authenticate[ip.src] == True:
+            is_authenticated = True
+
         # If the client is authenticated, install L2 MAC-MAC rule
         if is_authenticated:
             print "authenticated"
@@ -204,25 +229,23 @@ class CapFlow(app_manager.RyuApp):
             return
 
         # Client is not authenticated
-        if eth.ethertype == Proto.ETHER_IP:
-            ip = pkt.get_protocols(ipv4.ipv4)[0]
-            if ip.proto == 1:
-                print "ICMP, ignore"
-                return
-            if ip.proto == Proto.IP_UDP:
-                _udp = pkt.get_protocols(udp.udp)[0]
-                if _udp.dst_port == Proto.UDP_DNS:
-                    print "Install DNS bypass"
-                    install_dns_fwd(nw_src, nw_dst, out_port)
-                else:
-                    print "Unknown UDP proto, ignore"
-                    return
-            elif ip.proto == Proto.IP_TCP:
-                _tcp = pkt.get_protocols(tcp.tcp)[0]
-                if _tcp.dst_port == Proto.TCP_HTTP:
-                    print "Is HTTP traffic, installing NAT entry"
-                    install_http_nat(nw_src, nw_dst, ip.src, ip.dst,
-                                     _tcp.src_port, _tcp.dst_port)
+        if ip.proto == 1:
+            print "ICMP, ignore"
+            return
+        if ip.proto == Proto.IP_UDP:
+            _udp = pkt.get_protocols(udp.udp)[0]
+            if _udp.dst_port == Proto.UDP_DNS:
+                print "Install DNS bypass"
+                install_dns_fwd(nw_src, nw_dst, out_port)
             else:
-                print "Unknown IP proto, dropping"
-                drop_unknown_ip(nw_src, nw_dst, ip.proto)
+                print "Unknown UDP proto, ignore"
+                return
+        elif ip.proto == Proto.IP_TCP:
+            _tcp = pkt.get_protocols(tcp.tcp)[0]
+            if _tcp.dst_port == Proto.TCP_HTTP:
+                print "Is HTTP traffic, installing NAT entry"
+                install_http_nat(nw_src, nw_dst, ip.src, ip.dst,
+                                 _tcp.src_port, _tcp.dst_port)
+        else:
+            print "Unknown IP proto, dropping"
+            drop_unknown_ip(nw_src, nw_dst, ip.proto)
