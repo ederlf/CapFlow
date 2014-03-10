@@ -12,11 +12,10 @@ ovs-vsctl add-br switch
 ovs-vsctl set bridge switch protocols=OpenFlow13
 
 ip link add A type veth peer name B
-ifconfig A up
-ifconfig B up
 ip link add C type veth peer name D
-ifconfig C up
-ifconfig D up
+for link in A B C D; do
+    ip link set dev $link up
+done
 
 ifconfig C 192.168.17.1
 
