@@ -8,4 +8,4 @@ web site for authentication.
 ## Installation
 You need to install [Ryu OpenFlow controller](http://osrg.github.io/ryu/).
 Then you need to setup your topology with a single switch and edit config.py.
-Finally, you can start the contorller by running `ryu-manager Alternate.py`
+Finally, you can start the contorller by running `ryu-manager CapFlow.py`

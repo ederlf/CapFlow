@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #-*- coding:utf-8 -*-
 
-# WARNING: this web application is just a toy and should not be used for 
+# WARNING: this web application is just a toy and should not be used for
 # production purposes.
 
 # TODO: make a more serious and configurable web application. It could even be
@@ -14,9 +14,12 @@ from wsgiref.util import shift_path_info
 import os
 import os.path
 import urllib
+import urllib2
 
 import sys
 sys.path.append("../")
+
+from config import CTL_REST_IP, CTL_REST_PORT
 
 PLAIN = 0
 HTML = 1
@@ -51,9 +54,10 @@ exts = {
 
 USERS = {
     "eder": "abc",
-    "allan": "def",    
+    "allan": "def",
     "test": "test"
 }
+
 
 def reply(start_response, status_code, ctype=None, content=None):
     if ctype is not None:
@@ -61,15 +65,33 @@ def reply(start_response, status_code, ctype=None, content=None):
                                      ("Content-Length", str(len(content)))])
     else:
         start_response(status_code, [])
-    
+
     if content is None:
         return []
     return content
 
+
 def redirect(start_response, destination):
     start_response('303 See Other',  [("Location", destination)])
     return []
-    
+
+
+def get_client_address(environ):
+    try:
+        return environ['HTTP_X_FORWARDED_FOR'].split(',')[-1].strip()
+    except KeyError:
+        return environ['REMOTE_ADDR']
+
+
+def send_auth_request(ip):
+    server = "{:s}:{:s}".format(CTL_REST_IP, CTL_REST_PORT)
+    url = "http://{:s}/v1.0/authenticate/{:s}".format(server, ip)
+
+    params = urllib.urlencode({})
+    response = urllib2.urlopen(url, params).read()
+    print response
+
+
 def application(env, start_response):
     #print env
     old_path = env["PATH_INFO"]
@@ -79,7 +101,7 @@ def application(env, start_response):
         callback = request["callback"][0]
     except KeyError:
         callback = None
-    
+
     status = 404
     rbody = ""
     ctype = PLAIN
@@ -91,7 +113,8 @@ def application(env, start_response):
                 len_ = int(env["CONTENT_LENGTH"])
                 body = env['wsgi.input'].read(len_)
             except ValueError:
-                return reply(start_response, "400 Bad Request", PLAIN, "Missing login information.")
+                return reply(start_response, "400 Bad Request", PLAIN,
+                             "Missing login information.")
 
             request = parse_qs(body)
             try:
@@ -99,14 +122,17 @@ def application(env, start_response):
                 password = request["password"][0]
                 redirect_target = request["redirect"][0]
             except KeyError, IndexError:
-                return reply(start_response, "400 Bad Request", "Missing login information.")
+                return reply(start_response, "400 Bad Request",
+                             "Missing login information.")
             if username not in USERS or USERS[username] != password:
-                return reply(start_response, "401 Unauthorized", PLAIN, "Unauthorized access.")
+                return reply(start_response, "401 Unauthorized", PLAIN,
+                             "Unauthorized access.")
             text = (
                 "Authenticated. "
                 "Redirecting to <a href='%(url)s'>%(url)s</a> in 10 seconds. "
                 "<meta http-equiv='refresh' content='10;%(url)s'>"
                 ) % {'url': escape(redirect_target)}
+            send_auth_request(get_client_address(env))
             return reply(start_response, "200 OK", HTML, text)
     elif path == "login":
         request = parse_qs(env["QUERY_STRING"])
@@ -117,16 +143,16 @@ def application(env, start_response):
         # Return file
         path = os.path.join(os.getcwd(), path + env["PATH_INFO"])
         if os.path.exists(path) and os.path.isfile(path):
-            f = open(path, "r");
+            f = open(path, "r")
             rbody = f.read()
             ctype = exts[os.path.splitext(path)[1]]
             f.close()
-            return reply(start_response,"200 OK", ctype, rbody)
+            return reply(start_response, "200 OK", ctype, rbody)
         # Couldn't find path, redirect to login
         else:
             target = urllib.urlencode({
-                "redirect": "http://" + env["HTTP_HOST"] + "/" + old_path + env["PATH_INFO"] + "?" + env["QUERY_STRING"]
+                "redirect": "http://" + env["HTTP_HOST"] + "/" + old_path +
+                env["PATH_INFO"] + "?" + env["QUERY_STRING"]
             })
             print target
             return redirect(start_response, "/login?%s" % target)
-

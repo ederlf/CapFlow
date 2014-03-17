@@ -5,18 +5,17 @@ ovsdb-server --remote=punix:/usr/local/var/run/openvswitch/db.sock \
                      --certificate=db:Open_vSwitch,SSL,certificate \
                      --bootstrap-ca-cert=db:Open_vSwitch,SSL,ca_cert \
                      --pidfile --detach
-                     
+
 ovs-vswitchd --pidfile --detach
 
 ovs-vsctl add-br switch
 ovs-vsctl set bridge switch protocols=OpenFlow13
 
 ip link add A type veth peer name B
-ifconfig A up
-ifconfig B up
 ip link add C type veth peer name D
-ifconfig C up
-ifconfig D up
+for link in A B C D; do
+    ip link set dev $link up
+done
 
 ifconfig C 192.168.17.1
 
