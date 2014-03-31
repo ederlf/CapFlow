@@ -101,7 +101,7 @@ class CapFlow(app_manager.RyuApp):
                 ),
                 [parser.OFPActionOutput(in_port), ],
                 priority=10,
-                msg=msg,
+                msg=msg, in_port=in_port,
             )
 
         # pass ARP through, defaults to flooding if destination unknown
@@ -136,7 +136,7 @@ class CapFlow(app_manager.RyuApp):
                 ),
                 [parser.OFPActionOutput(out_port), ],
                 priority=100,
-                msg=msg,
+                msg=msg, in_port=in_port,
             )
 
         def install_dns_fwd(nw_src, nw_dst, out_port):
@@ -150,7 +150,7 @@ class CapFlow(app_manager.RyuApp):
                 ),
                 [parser.OFPActionOutput(out_port)],
                 priority=100,
-                msg=msg,
+                msg=msg, in_port=in_port,
             )
 
         def install_http_nat(nw_src, nw_dst, ip_src, ip_dst, tcp_src, tcp_dst):
@@ -194,7 +194,7 @@ class CapFlow(app_manager.RyuApp):
                  parser.OFPActionOutput(config.AUTH_SERVER_PORT)
                 ],
                 priority=1000,
-                msg=msg,
+                msg=msg, in_port=in_port,
             )
 
         def drop_unknown_ip(nw_src, nw_dst, ip_proto):
@@ -207,7 +207,7 @@ class CapFlow(app_manager.RyuApp):
                 ),
                 [],
                 priority=10,
-                msg=msg,
+                msg=msg, in_port=in_port,
             )
 
         if eth.ethertype != Proto.ETHER_IP:

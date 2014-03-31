@@ -1,4 +1,4 @@
-def add_flow(datapath, match, actions, priority=None, command=None, msg=None):
+def add_flow(datapath, match, actions, priority=None, command=None, msg=None,in_port=None):
     ofproto = datapath.ofproto
     parser = datapath.ofproto_parser
 
@@ -18,7 +18,7 @@ def add_flow(datapath, match, actions, priority=None, command=None, msg=None):
         out = parser.OFPPacketOut(
                 datapath=datapath,
                 actions=[parser.OFPActionOutput(ofproto.OFPP_TABLE)],
-                in_port=1,
+                in_port=in_port,
                 buffer_id=0xffffffff,
                 data=msg.data)
         datapath.send_msg(out)
