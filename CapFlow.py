@@ -92,15 +92,15 @@ class CapFlow(app_manager.RyuApp):
         if nw_src not in self.mac_to_port[dpid]:
             print "New client: dpid", dpid, "mac", nw_src, "port", in_port
             self.mac_to_port[dpid][nw_src] = in_port
-            print "Installing *->%s forwarding rule" % nw_src
-            # This enables all traffic addressed to the client to go there
-            # FIXME: do we really want to enable this on unauthenticated hosts?
+            # Be sure to not forward ARP traffic so we can learn
+            # sources
             util.add_flow(datapath,
                 parser.OFPMatch(
                     eth_dst=nw_src,
+                    eth_type=Proto.ETHER_ARP,
                 ),
-                [parser.OFPActionOutput(in_port), ],
-                priority=10,
+                [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER), ],
+                priority=1000,
                 msg=msg, in_port=in_port,
             )
 
@@ -119,12 +119,12 @@ class CapFlow(app_manager.RyuApp):
             datapath.send_msg(out)
             return
 
-        # Non-ARP traffic to unknown destination is dropped
+        # Non-ARP traffic to unknown L2 destination is dropped
         if nw_dst not in self.mac_to_port[dpid]:
             self.logger.info("Unknown destination!")
             return
 
-        # We know destination
+        # We know L2 destination
         out_port = self.mac_to_port[dpid][nw_dst]
 
         # Helper functions (note: access variables from outer scope)
@@ -216,18 +216,30 @@ class CapFlow(app_manager.RyuApp):
 
         ip = pkt.get_protocols(ipv4.ipv4)[0]
 
-        # Logic itself
-        is_authenticated = False
-        if self.authenticate[ip.src] == True:
-            is_authenticated = True
+        # Is this communication allowed?
+        # Allow if both src/dst are authenticated and
+        l2_traffic_is_allowed = False
+        
+        for entry in config.WHITELIST:
+            if nw_src == entry[0] and nw_dst == entry[1]:
+                l2_traffic_is_allowed = True
+        if self.authenticate[ip.src] and self.authenticate[ip.dst]:
+            l2_traffic_is_allowed = True
+        if self.authenticate[ip.src] and nw_dst == config.GATEWAY_MAC:
+            l2_traffic_is_allowed = True
+        if nw_src == config.GATEWAY_MAC and self.authenticate[ip.dst]:
+            l2_traffic_is_allowed = True
 
-        # If the client is authenticated, install L2 MAC-MAC rule
-        if is_authenticated:
+        if l2_traffic_is_allowed:
             self.logger.info("authenticated")
             self.logger.info("Installing %s to %s bypass", nw_src, nw_dst)
             install_l2_src_dst(nw_src, nw_dst, out_port)
             return
 
+        # Client authenticated but destination not, just block it
+        if self.authenticate[ip.src]:
+            self.logger.info("Auth client sending to non-auth destination blocked!")
+            return
         # Client is not authenticated
         if ip.proto == 1:
             self.logger.info("ICMP, ignore")
