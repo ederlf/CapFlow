@@ -86,7 +86,7 @@ class CapFlow(app_manager.RyuApp):
 
         dpid = datapath.id
 
-        self.logger.info("packet in %s %s %s %s",
+        self.logger.info("packet at switch %s from %s to %s (port %s)",
                          dpid, nw_src, nw_dst, in_port)
 
         if nw_src not in self.mac_to_port[dpid]:
@@ -106,7 +106,7 @@ class CapFlow(app_manager.RyuApp):
 
         # pass ARP through, defaults to flooding if destination unknown
         if eth.ethertype == Proto.ETHER_ARP:
-            print "ARP"
+            self.logger.info("ARP")
             port = self.mac_to_port[dpid].get(nw_dst, ofproto.OFPP_FLOOD)
 
             out = parser.OFPPacketOut(
@@ -121,7 +121,7 @@ class CapFlow(app_manager.RyuApp):
 
         # Non-ARP traffic to unknown destination is dropped
         if nw_dst not in self.mac_to_port[dpid]:
-            print "Unknown destination!",
+            self.logger.info("Unknown destination!")
             return
 
         # We know destination
@@ -211,7 +211,7 @@ class CapFlow(app_manager.RyuApp):
             )
 
         if eth.ethertype != Proto.ETHER_IP:
-            print "not handling non-ip traffic"
+            self.logger.info("not handling non-ip traffic")
             return
 
         ip = pkt.get_protocols(ipv4.ipv4)[0]
@@ -223,29 +223,29 @@ class CapFlow(app_manager.RyuApp):
 
         # If the client is authenticated, install L2 MAC-MAC rule
         if is_authenticated:
-            print "authenticated"
-            print "Installing", nw_src, "to", nw_dst, "bypass"
+            self.logger.info("authenticated")
+            self.logger.info("Installing %s to %s bypass", nw_src, nw_dst)
             install_l2_src_dst(nw_src, nw_dst, out_port)
             return
 
         # Client is not authenticated
         if ip.proto == 1:
-            print "ICMP, ignore"
+            self.logger.info("ICMP, ignore")
             return
         if ip.proto == Proto.IP_UDP:
             _udp = pkt.get_protocols(udp.udp)[0]
             if _udp.dst_port == Proto.UDP_DNS:
-                print "Install DNS bypass"
+                self.logger.info("Install DNS bypass")
                 install_dns_fwd(nw_src, nw_dst, out_port)
             else:
-                print "Unknown UDP proto, ignore"
+                self.logger.info("Unknown UDP proto, ignore")
                 return
         elif ip.proto == Proto.IP_TCP:
             _tcp = pkt.get_protocols(tcp.tcp)[0]
             if _tcp.dst_port == Proto.TCP_HTTP:
-                print "Is HTTP traffic, installing NAT entry"
+                self.logger.info("Is HTTP traffic, installing NAT entry %d", in_port)
                 install_http_nat(nw_src, nw_dst, ip.src, ip.dst,
                                  _tcp.src_port, _tcp.dst_port)
         else:
-            print "Unknown IP proto, dropping"
+            self.logger.info("Unknown IP proto, dropping")
             drop_unknown_ip(nw_src, nw_dst, ip.proto)
