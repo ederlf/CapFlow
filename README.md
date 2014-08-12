@@ -9,3 +9,6 @@ web site for authentication.
 You need to install [Ryu OpenFlow controller](http://osrg.github.io/ryu/).
 Then you need to setup your topology with a single switch and edit config.py.
 Finally, you can start the contorller by running `ryu-manager CapFlow.py`
+
+## Test in Mininet
+See `mininet/README.md`
